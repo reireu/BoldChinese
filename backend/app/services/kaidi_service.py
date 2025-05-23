@@ -287,8 +287,8 @@ def _evaluate_pronunciation(aligned_phones_details: List[Dict[str, Any]], refere
     return {
         "phone_pronunciation_scores": pronunciation_scores,
         "overall_pronunciation_score": round(overall_pronunciation_score, 3),
-        "levenshtein_distance": distance,
-        "levenshtein_path": alignment_path # デバッグ用にパスも含む
+        "levenshtein_distance": int(distance), 
+        "levenshtein_path": alignment_path # デバッグ用にパスも含める
     }
 
 def _pinyin_to_phonetic_segments(pinyin_list: List[str]) -> List[str]:
