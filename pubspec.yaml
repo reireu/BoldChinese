@@ -1,0 +1,48 @@
+name: bold_chinese
+description: A Chinese pronunciation learning app using Kaldi for pronunciation assessment.
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # UI関連
+  cupertino_icons: ^1.0.2
+  google_fonts: ^6.1.0
+  flutter_flow_theme: ^2.0.0
+  flutter_flow_widgets: ^0.0.4
+
+  # 音声録音/再生
+  flutter_sound: ^9.2.13
+  permission_handler: ^11.0.0
+
+  # HTTP通信
+  http: ^1.1.0
+  dio: ^5.3.3
+
+  # ファイル操作
+  path_provider: ^2.1.1
+
+  # 状態管理
+  provider: ^6.0.5
+
+  # ルーティング
+  go_router: ^13.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
