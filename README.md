@@ -43,5 +43,5 @@ License
 This project will be released under the MIT License.
 
 ## Work in process
-Introducing the Workflow for Aligning Mandarin Speech using Kaidi
+Introducing the Workflow for Aligning Mandarin Speech using Kaidi<br>
 https://qiita.com/reireu/items/53fa6b3dac3504d304ce
