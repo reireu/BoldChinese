@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:dio/dio.dart';
+import 'dart:io';
 import 'dart:async';
 
 class TranscriptionScreen extends StatefulWidget {
@@ -13,6 +17,8 @@ class TranscriptionScreen extends StatefulWidget {
 
 class _TranscriptionScreenState extends State<TranscriptionScreen>
     with TickerProviderStateMixin {
+  final _audioRecorder = Record();
+  String? _recordingPath;
   bool _isRecording = false;
   bool _isAnalyzing = false;
   bool _hasRecorded = false;
@@ -38,12 +44,19 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
       curve: Curves.easeInOut,
     ));
     _recordingAnimationController.repeat(reverse: true);
+    _initializeRecorder();
+  }
+
+  Future<void> _initializeRecorder() async {
+    final status = await _audioRecorder.hasPermission();
+    if (!status) {
+      await _audioRecorder.requestPermission();
+    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // arguments経由でも受け取れるように
     final args = ModalRoute.of(context)?.settings.arguments;
     if (widget.targetText != null) {
       _targetText = widget.targetText;
@@ -56,74 +69,106 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
   void dispose() {
     _recordingTimer?.cancel();
     _recordingAnimationController.dispose();
+    _audioRecorder.dispose();
     super.dispose();
   }
 
-  void _startRecording() {
-    setState(() {
-      _isRecording = true;
-      _hasRecorded = false;
-      _recordingDuration = Duration.zero;
-      _recordedText = '';
-    });
+  Future<void> _startRecording() async {
+    try {
+      final dir = await getTemporaryDirectory();
+      _recordingPath = '${dir.path}/recording_${DateTime.now().millisecondsSinceEpoch}.wav';
 
-    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      await _audioRecorder.start(
+        path: _recordingPath,
+        encoder: AudioEncoder.wav,
+        bitRate: 128000,
+        samplingRate: 44100,
+      );
+
       setState(() {
-        _recordingDuration = Duration(seconds: timer.tick);
+        _isRecording = true;
+        _hasRecorded = false;
+        _recordingDuration = Duration.zero;
+        _recordedText = '';
       });
-    });
 
-    // TODO: 実際の録音開始処理をここに追加
-    print('録音開始: $_targetText');
+      _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        setState(() {
+          _recordingDuration = Duration(seconds: timer.tick);
+        });
+      });
+
+      print('録音開始: $_targetText');
+    } catch (e) {
+      print('録音開始エラー: $e');
+    }
   }
 
-  void _stopRecording() {
+  Future<void> _stopRecording() async {
     _recordingTimer?.cancel();
-    setState(() {
-      _isRecording = false;
-      _hasRecorded = true;
-      _isAnalyzing = true;
-    });
+    try {
+      await _audioRecorder.stop();
+      setState(() {
+        _isRecording = false;
+        _hasRecorded = true;
+        _isAnalyzing = true;
+      });
 
-    // TODO: 録音停止と解析開始処理（API連携など）
-    _simulateAnalysis();
+      await _analyzePronunciation();
+    } catch (e) {
+      print('録音停止エラー: $e');
+      setState(() {
+        _isRecording = false;
+        _hasRecorded = false;
+        _isAnalyzing = false;
+      });
+    }
   }
 
-void _simulateAnalysis() async {
-  // TODO: 録音ファイルのパスを取得する処理を追加
-  final audioFilePath = '/path/to/recorded_audio.wav'; // 実際の録音ファイルパスに置き換えてください
+  Future<void> _analyzePronunciation() async {
+    if (_recordingPath == null || !File(_recordingPath!).existsSync()) {
+      setState(() {
+        _isAnalyzing = false;
+        _recordedText = '録音ファイルが見つかりません';
+      });
+      return;
+    }
 
-  try {
-    setState(() {
-      _isAnalyzing = true;
-    });
+    try {
+      final dio = Dio();
+      final formData = FormData.fromMap({
+        'audio': await MultipartFile.fromFile(_recordingPath!, filename: 'audio.wav'),
+        'text': _targetText ?? '',
+      });
 
-    // DioでAPIに音声ファイルを送信
-    final dio = Dio();
-    final formData = FormData.fromMap({
-      'audio': await MultipartFile.fromFile(audioFilePath, filename: 'audio.wav'),
-      'text': _targetText ?? '',
-    });
+      final response = await dio.post(
+        'http://localhost:8000/api/analyze', // APIエンドポイントを統一
+        data: formData,
+        options: Options(
+          headers: {
+            'Accept': 'application/json',
+          },
+          validateStatus: (status) => status! < 500,
+        ),
+      );
 
-    final response = await dio.post(
-      'http://localhost:8000/api/recognize', // 実際のAPIエンドポイントに変更
-      data: formData,
-    );
-
-    final recognizedText = response.data['recognized_text'] as String? ?? '';
-
-    setState(() {
-      _isAnalyzing = false;
-      _recordedText = recognizedText;
-    });
-  } catch (e) {
-    setState(() {
-      _isAnalyzing = false;
-      _recordedText = '認識に失敗しました';
-    });
-    print('認識エラー: $e');
+      if (response.statusCode == 200) {
+        final recognizedText = response.data['recognized_text'] as String? ?? '';
+        setState(() {
+          _isAnalyzing = false;
+          _recordedText = recognizedText;
+        });
+      } else {
+        throw Exception('API error: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('API通信エラー: $e');
+      setState(() {
+        _isAnalyzing = false;
+        _recordedText = '認識に失敗しました';
+      });
+    }
   }
-}
 
   void _resetRecording() {
     setState(() {
@@ -132,6 +177,7 @@ void _simulateAnalysis() async {
       _isAnalyzing = false;
       _recordedText = '';
       _recordingDuration = Duration.zero;
+      _recordingPath = null;
     });
     _recordingTimer?.cancel();
   }

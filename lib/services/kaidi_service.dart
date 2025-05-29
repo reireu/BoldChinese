@@ -77,3 +77,20 @@ class KaldiService {
     _isRecorderInitialized = false;
   }
 }
+
+def _run_kaldi_alignment(audio_path: str, text: str) -> Dict[str, Any]:
+    """本番用のKaldi実装"""
+    try:
+        command = [
+            "python",
+            os.path.join(os.path.dirname(__file__), "kaldi_aligner_wrapper.py"),
+            "--audio", audio_path,
+            "--text", text,
+            "--model", MANDARIN_MODEL_PATH
+        ]
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        return json.loads(result.stdout)
+    except subprocess.CalledProcessError as e:
+        raise KaldiAlignmentError(f"Kaldi alignment failed: {e.stderr}")
+    except json.JSONDecodeError as e:
+        raise KaldiAlignmentError(f"Failed to parse Kaldi output: {e}")

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, File, Form, UploadFile, HTTPException, status
-from backend.app.services.kaldi_service import analyze_chinese_pronunciation, PronunciationAnalysisError
+from app.services.kaldi_service import analyze_chinese_pronunciation, PronunciationAnalysisError
 import shutil
 import tempfile
 import os
