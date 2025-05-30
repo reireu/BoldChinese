@@ -4,20 +4,20 @@ An application for speech analysis and feedback designed to support Chinese lang
 
 ## Overview
 
-BoldChinese is an app that supports Chinese pronunciation practice. By leveraging speech recognition technology and AI, it analyzes user pronunciation and provides immediate feedback.
+BoldChinese is an app that supports Chinese pronunciation practice. By leveraging speech recognition <br>technology and AI, it analyzes user pronunciation and provides immediate feedback.
 
 ## Key Features
 
-Real-time voice analysis
-Scoring for pronunciation, intonation, and rhythm
-Detailed feedback and suggestions for improvement
+Real-time voice analysis<br>
+Scoring for pronunciation, intonation, and rhythm<br>
+Detailed feedback and suggestions for improvement<br>
 User-friendly interface
 Technology Stack
 
 ## Frontend
 
-Flutter/Dart
-FlutterFlow UI components
+Flutter/Dart<br>
+FlutterFlow UI components<br>
 Firebase Authentication
 
 ## Backend
@@ -35,8 +35,12 @@ source venv/bin/activate  # For Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Start the server
+# Start frontend
 uvicorn app.main:app --reload
+
+# Start backend as well
+cd BoldChinese
+flutter run -d chrome
 ```
 License
 
