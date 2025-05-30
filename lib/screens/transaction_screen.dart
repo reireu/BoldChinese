@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import '/flutter_flow/flutter_flow_theme.dart';
-import '/flutter_flow/flutter_flow_widgets.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
@@ -17,7 +15,8 @@ class TranscriptionScreen extends StatefulWidget {
 
 class _TranscriptionScreenState extends State<TranscriptionScreen>
     with TickerProviderStateMixin {
-  final _audioRecorder = Record();
+  // Use AudioRecorder instead of Record
+  final _audioRecorder = AudioRecorder();
   String? _recordingPath;
   bool _isRecording = false;
   bool _isAnalyzing = false;
@@ -32,6 +31,11 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
   @override
   void initState() {
     super.initState();
+    _setupAnimation();
+    _initializeRecorder();
+  }
+
+  void _setupAnimation() {
     _recordingAnimationController = AnimationController(
       duration: const Duration(milliseconds: 1000),
       vsync: this,
@@ -44,13 +48,17 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
       curve: Curves.easeInOut,
     ));
     _recordingAnimationController.repeat(reverse: true);
-    _initializeRecorder();
   }
 
   Future<void> _initializeRecorder() async {
-    final status = await _audioRecorder.hasPermission();
-    if (!status) {
-      await _audioRecorder.requestPermission();
+    try {
+      final hasPermission = await _audioRecorder.hasPermission();
+      if (!hasPermission) {
+        // Handle permission request or show error
+        print('Audio recording permission not granted');
+      }
+    } catch (e) {
+      print('Error initializing recorder: $e');
     }
   }
 
@@ -78,11 +86,14 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
       final dir = await getTemporaryDirectory();
       _recordingPath = '${dir.path}/recording_${DateTime.now().millisecondsSinceEpoch}.wav';
 
+      // Use the new API with RecordConfig
       await _audioRecorder.start(
-        path: _recordingPath,
-        encoder: AudioEncoder.wav,
-        bitRate: 128000,
-        samplingRate: 44100,
+        const RecordConfig(
+          encoder: AudioEncoder.wav,
+          bitRate: 128000,
+          sampleRate: 44100,
+        ),
+        path: _recordingPath!,
       );
 
       setState(() {
@@ -101,6 +112,7 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
       print('録音開始: $_targetText');
     } catch (e) {
       print('録音開始エラー: $e');
+      _showErrorSnackBar('録音の開始に失敗しました');
     }
   }
 
@@ -122,6 +134,7 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
         _hasRecorded = false;
         _isAnalyzing = false;
       });
+      _showErrorSnackBar('録音の停止に失敗しました');
     }
   }
 
@@ -142,7 +155,7 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
       });
 
       final response = await dio.post(
-        'http://localhost:8000/api/analyze', // APIエンドポイントを統一
+        'http://localhost:8000/api/analyze', 
         data: formData,
         options: Options(
           headers: {
@@ -167,6 +180,7 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
         _isAnalyzing = false;
         _recordedText = '認識に失敗しました';
       });
+      _showErrorSnackBar('音声認識に失敗しました');
     }
   }
 
@@ -193,104 +207,353 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
     return "$minutes:$seconds";
   }
 
-  Widget _buildTextComparison() {
-    if (!_hasRecorded || _isAnalyzing) {
-      return Container();
+  void _showErrorSnackBar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
+  }
 
-    return Container(
-      margin: const EdgeInsets.only(top: 24),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
+  Widget _buildTargetTextCard() {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.text_snippet_outlined,
+                  color: Theme.of(context).primaryColor,
+                  size: 24,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '練習テキスト',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF333333),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: Text(
+                _targetText ?? '練習テキストが設定されていません',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: const Color(0xFF333333),
+                  height: 1.6,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecordingStatus() {
+    if (_isRecording) {
+      return Column(
         children: [
+          AnimatedBuilder(
+            animation: _recordingAnimation,
+            builder: (context, child) {
+              return Transform.scale(
+                scale: _recordingAnimation.value,
+                child: Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.mic,
+                    color: Colors.red,
+                    size: 40,
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
           Text(
-            '結果比較',
-            style: FlutterFlowTheme.of(context).titleMedium.override(
-              fontFamily: 'Manrope',
+            '録音中...',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: Colors.red,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _formatDuration(_recordingDuration),
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
               color: const Color(0xFF333333),
               fontWeight: FontWeight.bold,
-              letterSpacing: 0.0,
+            ),
+          ),
+        ],
+      );
+    } else if (_isAnalyzing) {
+      return Column(
+        children: [
+          CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(
+              Theme.of(context).primaryColor,
             ),
           ),
           const SizedBox(height: 16),
-          // 目標テキスト
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '目標テキスト',
-                style: FlutterFlowTheme.of(context).labelMedium.override(
-                  fontFamily: 'Manrope',
-                  color: Colors.grey[600],
-                  letterSpacing: 0.0,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.blue[50],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue[200]!),
-                ),
-                child: Text(
-                  _targetText ?? '',
-                  style: FlutterFlowTheme.of(context).bodyMedium.override(
-                    fontFamily: 'Manrope',
-                    color: Colors.blue[800],
-                    letterSpacing: 0.0,
-                    height: 1.5,
-                  ),
-                ),
-              ),
-            ],
+          Text(
+            '解析中...',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: Theme.of(context).primaryColor,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      );
+    } else {
+      return Column(
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: Theme.of(context).primaryColor.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.mic,
+              color: Theme.of(context).primaryColor,
+              size: 40,
+            ),
           ),
           const SizedBox(height: 16),
-          // 認識結果
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '認識結果',
-                style: FlutterFlowTheme.of(context).labelMedium.override(
-                  fontFamily: 'Manrope',
-                  color: Colors.grey[600],
-                  letterSpacing: 0.0,
-                ),
+          Text(
+            _hasRecorded ? '録音完了' : 'タップして録音開始',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: const Color(0xFF333333),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      );
+    }
+  }
+
+  Widget _buildRecordingButton() {
+    final bool isEnabled = !_isAnalyzing;
+    final String buttonText = _isRecording ? '録音停止' : '録音開始';
+    final Color buttonColor = _isRecording ? Colors.red : Theme.of(context).primaryColor;
+
+    return ElevatedButton(
+      onPressed: isEnabled ? (_isRecording ? _stopRecording : _startRecording) : null,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: buttonColor,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        elevation: 2,
+      ),
+      child: Text(
+        buttonText,
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRetryButton() {
+    return OutlinedButton(
+      onPressed: _retryRecording,
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        side: BorderSide(color: Colors.grey[400]!),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+      ),
+      child: Text(
+        'もう一度',
+        style: TextStyle(
+          color: Colors.grey[700],
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecordingCard() {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          children: [
+            _buildRecordingStatus(),
+            const SizedBox(height: 32),
+            if (!_isAnalyzing)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (_hasRecorded) ...[
+                    _buildRetryButton(),
+                    const SizedBox(width: 16),
+                  ],
+                  _buildRecordingButton(),
+                ],
               ),
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.green[50],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.green[200]!),
-                ),
-                child: Text(
-                  _recordedText.isNotEmpty ? _recordedText : '認識中...',
-                  style: FlutterFlowTheme.of(context).bodyMedium.override(
-                    fontFamily: 'Manrope',
-                    color: Colors.green[800],
-                    letterSpacing: 0.0,
-                    height: 1.5,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextComparison() {
+    if (!_hasRecorded || _isAnalyzing) {
+      return const SizedBox.shrink();
+    }
+
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '結果比較',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: const Color(0xFF333333),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            // 目標テキスト
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '目標テキスト',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: Colors.grey[600],
                   ),
                 ),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.blue[200]!),
+                  ),
+                  child: Text(
+                    _targetText ?? '',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.blue[800],
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // 認識結果
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '認識結果',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.green[50],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.green[200]!),
+                  ),
+                  child: Text(
+                    _recordedText.isNotEmpty ? _recordedText : '認識中...',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.green[800],
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHintCard() {
+    if (_hasRecorded || _isRecording) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Theme.of(context).primaryColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Theme.of(context).primaryColor.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.info_outline,
+            color: Theme.of(context).primaryColor,
+            size: 24,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              '上記のテキストを読み上げて、録音ボタンをタップしてください',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).primaryColor,
               ),
-            ],
+            ),
           ),
         ],
       ),
@@ -299,10 +562,27 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
 
   @override
   Widget build(BuildContext context) {
-    final theme = FlutterFlowTheme.of(context);
-
     return Scaffold(
       backgroundColor: const Color(0xFF8674A1),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF8674A1),
+        elevation: 0,
+        leading: IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(
+            Icons.arrow_back,
+            color: Colors.white,
+            size: 28,
+          ),
+        ),
+        title: Text(
+          '発音練習',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
@@ -310,307 +590,12 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ヘッダー
-                Row(
-                  children: [
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(
-                        Icons.arrow_back,
-                        color: Colors.white,
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '発音練習',
-                      style: theme.headlineSmall.override(
-                        fontFamily: 'Manrope',
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.0,
-                      ),
-                    ),
-                  ],
-                ),
+                _buildTargetTextCard(),
                 const SizedBox(height: 32),
-
-                // 練習テキスト表示
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.text_snippet_outlined,
-                              color: const Color(0xFF8674A1),
-                              size: 24,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '練習テキスト',
-                              style: theme.titleMedium.override(
-                                fontFamily: 'Manrope',
-                                color: const Color(0xFF333333),
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.0,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[50],
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.grey[200]!),
-                          ),
-                          child: Text(
-                            _targetText ?? '',
-                            style: theme.bodyLarge.override(
-                              fontFamily: 'Manrope',
-                              color: const Color(0xFF333333),
-                              letterSpacing: 0.0,
-                              height: 1.6,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 32),
-
-                // 録音コントロール
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      children: [
-                        // ステータス表示
-                        if (_isRecording)
-                          Column(
-                            children: [
-                              AnimatedBuilder(
-                                animation: _recordingAnimation,
-                                builder: (context, child) {
-                                  return Transform.scale(
-                                    scale: _recordingAnimation.value,
-                                    child: Container(
-                                      width: 80,
-                                      height: 80,
-                                      decoration: BoxDecoration(
-                                        color: Colors.red.withOpacity(0.2),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(
-                                        Icons.mic,
-                                        color: Colors.red,
-                                        size: 40,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                '録音中...',
-                                style: theme.titleMedium.override(
-                                  fontFamily: 'Manrope',
-                                  color: Colors.red,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.0,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                _formatDuration(_recordingDuration),
-                                style: theme.headlineMedium.override(
-                                  fontFamily: 'Manrope',
-                                  color: const Color(0xFF333333),
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.0,
-                                ),
-                              ),
-                            ],
-                          )
-                        else if (_isAnalyzing)
-                          Column(
-                            children: [
-                              const CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Color(0xFF8674A1),
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                '解析中...',
-                                style: theme.titleMedium.override(
-                                  fontFamily: 'Manrope',
-                                  color: const Color(0xFF8674A1),
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.0,
-                                ),
-                              ),
-                            ],
-                          )
-                        else
-                          Column(
-                            children: [
-                              Container(
-                                width: 80,
-                                height: 80,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF8674A1).withOpacity(0.1),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.mic,
-                                  color: Color(0xFF8674A1),
-                                  size: 40,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                _hasRecorded ? '録音完了' : 'タップして録音開始',
-                                style: theme.titleMedium.override(
-                                  fontFamily: 'Manrope',
-                                  color: const Color(0xFF333333),
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.0,
-                                ),
-                              ),
-                            ],
-                          ),
-
-                        const SizedBox(height: 32),
-
-                        // 録音ボタン
-                        if (!_isAnalyzing)
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              if (_hasRecorded) ...[
-                                // リトライボタン
-                                FFButtonWidget(
-                                  onPressed: _retryRecording,
-                                  text: 'もう一度',
-                                  options: FFButtonOptions(
-                                    width: 120,
-                                    height: 56,
-                                    color: Colors.grey[100],
-                                    textStyle: theme.titleMedium.override(
-                                      fontFamily: 'Manrope',
-                                      color: Colors.grey[700],
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: 0.0,
-                                    ),
-                                    elevation: 0,
-                                    borderSide: BorderSide(
-                                      color: Colors.grey[300]!,
-                                      width: 1,
-                                    ),
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                              ],
-                              // メイン録音ボタン
-                              FFButtonWidget(
-                                onPressed: _isRecording ? _stopRecording : _startRecording,
-                                text: _isRecording
-                                    ? '録音停止'
-                                    : (_hasRecorded ? '再録音' : '録音開始'),
-                                options: FFButtonOptions(
-                                  width: _hasRecorded ? 120 : 200,
-                                  height: 56,
-                                  color: _isRecording ? Colors.red : const Color(0xFF8674A1),
-                                  textStyle: theme.titleMedium.override(
-                                    fontFamily: 'Manrope',
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.0,
-                                  ),
-                                  elevation: 0,
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                            ],
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // 結果比較表示
+                _buildRecordingCard(),
                 _buildTextComparison(),
-
                 const SizedBox(height: 24),
-
-                // 使い方のヒント
-                if (!_hasRecorded && !_isRecording)
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.2),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.info_outline,
-                          color: Colors.white.withOpacity(0.8),
-                          size: 24,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            '上記のテキストを読み上げて、録音ボタンをタップしてください',
-                            style: theme.bodySmall.override(
-                              fontFamily: 'Manrope',
-                              color: Colors.white.withOpacity(0.9),
-                              letterSpacing: 0.0,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                _buildHintCard(),
               ],
             ),
           ),

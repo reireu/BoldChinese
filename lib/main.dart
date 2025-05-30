@@ -4,7 +4,11 @@ import 'package:bold_chinese/screens/home_screen.dart';
 import 'package:bold_chinese/services/analyze_service.dart';
 
 // グローバルプロバイダーの設定
-final analyzeServiceProvider = Provider((ref) => AnalyzeService());
+final analyzeServiceProvider = Provider((ref) => AnalyzeService(
+  maxFileSizeMB: MAX_FILE_SIZE_MB,
+  timeoutDuration: TIMEOUT_DURATION,
+  kaldiServiceUrl: KALDI_SERVICE_URL,
+));
 
 void main() {
   runApp(
