@@ -1,0 +1,123 @@
+Flutter crash report.
+Please report a bug at https://github.com/flutter/flutter/issues.
+
+## command
+
+flutter run -d chrome
+
+## exception
+
+ProcessException: ProcessException: No such file or directory
+  Command: /opt/homebrew/Caskroom/flutter/3.22.1/flutter/bin/cache/dart-sdk/bin/dart development-service --vm-service-uri=http://127.0.0.1:44456/QIl88roDSAY= --bind-address=127.0.0.1 --bind-port=0
+
+```
+#0      _ProcessImpl._start (dart:io-patch/process_patch.dart:418:33)
+#1      Process.start (dart:io-patch/process_patch.dart:42:20)
+#2      DartDevelopmentServiceLauncher.start (package:dds/dds_launcher.dart:58:35)
+#3      DebugService.startDartDevelopmentService (package:dwds/src/services/debug_service.dart:174:49)
+#4      DevHandler._createAppDebugServices (package:dwds/src/handlers/dev_handler.dart:572:38)
+#5      DevHandler.loadAppServices (package:dwds/src/handlers/dev_handler.dart:243:27)
+<asynchronous suspension>
+#6      Dwds.debugConnection (package:dwds/dart_web_debug_service.dart:58:30)
+<asynchronous suspension>
+#7      WebDevFS.connect.<anonymous closure> (package:flutter_tools/src/isolated/devfs_web.dart:926:21)
+<asynchronous suspension>
+```
+
+## flutter doctor
+
+```
+[31m[☠][39m Flutter (the doctor check crashed)
+    [31m✗[39m Due to an error, the doctor check did not complete. If the error message
+      below is not helpful, please let us know about this issue at
+      https://github.com/flutter/flutter/issues.
+    [31m✗[39m Exception: Could not find directory at
+      /opt/homebrew/Caskroom/flutter/3.22.1/flutter/bin/cache/dart-sdk/bin/resou
+      rces/devtools
+    [32m•[39m #0      Cache.devToolsVersion (package:flutter_tools/src/cache.dart:429:9)
+      #1      _DefaultDoctorValidatorsProvider.validators.<anonymous closure>
+      (package:flutter_tools/src/doctor.dart:138:46)
+      #2      FlutterValidator.validateImpl
+      (package:flutter_tools/src/doctor.dart:594:84)
+      #3      DoctorValidator.validate
+      (package:flutter_tools/src/doctor_validator.dart:58:43)
+      #4      Doctor.startValidatorTasks.<anonymous closure>
+      (package:flutter_tools/src/doctor.dart:244:72)
+      #5      asyncGuard.<anonymous closure>
+      (package:flutter_tools/src/base/async_guard.dart:109:34)
+      #6      _rootRun (dart:async/zone.dart:1525:13)
+      #7      _CustomZone.run (dart:async/zone.dart:1422:19)
+      #8      _runZoned (dart:async/zone.dart:2033:6)
+      #9      runZonedGuarded (dart:async/zone.dart:2019:12)
+      #10     runZoned (dart:async/zone.dart:1952:12)
+      #11     asyncGuard (package:flutter_tools/src/base/async_guard.dart:106:3)
+      #12     Doctor.startValidatorTasks
+      (package:flutter_tools/src/doctor.dart:234:9)
+      #13     DoctorText._validatorTasks
+      (package:flutter_tools/src/doctor.dart:827:60)
+      #14     DoctorText._validatorTasks (package:flutter_tools/src/doctor.dart)
+      #15     DoctorText._runDiagnosis
+      (package:flutter_tools/src/doctor.dart:832:32)
+      #16     DoctorText.text (package:flutter_tools/src/doctor.dart:823:36)
+      #17     DoctorText.text (package:flutter_tools/src/doctor.dart)
+      #18     _createLocalCrashReport (package:flutter_tools/runner.dart:274:51)
+      #19     _handleToolError (package:flutter_tools/runner.dart:235:31)
+      <asynchronous suspension>
+      #20     AppContext.run.<anonymous closure>
+      (package:flutter_tools/src/base/context.dart:154:19)
+      <asynchronous suspension>
+      #21     main (package:flutter_tools/executable.dart:102:3)
+      <asynchronous suspension>
+
+
+[33m[!][39m Android toolchain - develop for Android devices (Android SDK version 34.0.0)
+    [5.5s]
+    [32m•[39m Android SDK at /Users/serenakurashina/Library/Android/sdk
+    [31m✗[39m cmdline-tools component is missing.
+      Try installing or updating Android Studio.
+      Alternatively, download the tools from
+      https://developer.android.com/studio#command-line-tools-only and make sure
+      to set the ANDROID_HOME environment variable.
+      See https://developer.android.com/studio/command-line for more details.
+    [31m✗[39m Android license status unknown.
+      Run `flutter doctor --android-licenses` to accept the SDK licenses.
+      See https://flutter.dev/to/macos-android-setup for more details.
+
+[33m[!][39m Xcode - develop for iOS and macOS (Xcode 16.4) [15.4s]
+    [32m•[39m Xcode at /Applications/Xcode.app/Contents/Developer
+    [32m•[39m Build 16F6
+    [31m✗[39m Unable to get list of installed Simulator runtimes.
+    [31m✗[39m CocoaPods not installed.
+        CocoaPods is a package manager for iOS or macOS platform code.
+        Without CocoaPods, plugins will not work on iOS or macOS.
+        For more info, see https://flutter.dev/to/platform-plugins
+      For installation instructions, see
+      https://guides.cocoapods.org/using/getting-started.html#installation
+
+[32m[✓][39m Chrome - develop for the web [34ms]
+    [32m•[39m Chrome at /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+
+[32m[✓][39m Android Studio (version 2024.2) [34ms]
+    [32m•[39m Android Studio at /Applications/Android Studio.app/Contents
+    [32m•[39m Flutter plugin can be installed from:
+      🔨 https://plugins.jetbrains.com/plugin/9212-flutter
+    [32m•[39m Dart plugin can be installed from:
+      🔨 https://plugins.jetbrains.com/plugin/6351-dart
+    [32m•[39m Java version OpenJDK Runtime Environment (build 21.0.3+-79915917-b509.11)
+
+[32m[✓][39m VS Code (version 1.96.4) [28ms]
+    [32m•[39m VS Code at /Users/serenakurashina/Downloads/Visual Studio
+      Code.app/Contents
+    [32m•[39m Flutter extension can be installed from:
+      🔨 https://marketplace.visualstudio.com/items?itemName=Dart-Code.flutter
+
+[32m[✓][39m Connected device (2 available) [12.8s]
+    [32m•[39m macOS (desktop) • macos  • darwin-arm64   • macOS 15.4.1 24E263
+      darwin-arm64
+    [32m•[39m Chrome (web)    • chrome • web-javascript • Google Chrome 137.0.7151.69
+
+[32m[✓][39m Network resources [2.4s]
+    [32m•[39m All expected network resources are available.
+
+[33m![39m Doctor found issues in 3 categories.
+```
