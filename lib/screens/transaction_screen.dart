@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
 import 'dart:io';
 import 'dart:async';
+import 'dart:typed_data';
+import 'dart:convert';
+import 'package:bold_chinese/utils/storage_helper.dart';
 
 class TranscriptionScreen extends StatefulWidget {
   final String? targetText;
+  
   const TranscriptionScreen({Key? key, this.targetText}) : super(key: key);
 
   @override
@@ -15,24 +20,50 @@ class TranscriptionScreen extends StatefulWidget {
 
 class _TranscriptionScreenState extends State<TranscriptionScreen>
     with TickerProviderStateMixin {
-  // Use AudioRecorder instead of Record
   final _audioRecorder = AudioRecorder();
+  final TextEditingController _textController = TextEditingController();
+  final Dio _dio = Dio();
+  
   String? _recordingPath;
   bool _isRecording = false;
   bool _isAnalyzing = false;
   bool _hasRecorded = false;
+  bool _isEditing = false;
   String _recordedText = '';
   Duration _recordingDuration = Duration.zero;
   Timer? _recordingTimer;
   late AnimationController _recordingAnimationController;
   late Animation<double> _recordingAnimation;
   String? _targetText;
+  
+  // Web環境での録音データを保存
+  Uint8List? _webRecordingData;
 
   @override
   void initState() {
     super.initState();
     _setupAnimation();
     _initializeRecorder();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (widget.targetText != null) {
+      _targetText = widget.targetText;
+    } else if (args is String) {
+      _targetText = args;
+    }
+  }
+
+  @override
+  void dispose() {
+    _recordingTimer?.cancel();
+    _recordingAnimationController.dispose();
+    _audioRecorder.dispose();
+    _textController.dispose();
+    super.dispose();
   }
 
   void _setupAnimation() {
@@ -54,46 +85,42 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
     try {
       final hasPermission = await _audioRecorder.hasPermission();
       if (!hasPermission) {
-        // Handle permission request or show error
-        print('Audio recording permission not granted');
+        print('録音の権限がありません。設定から許可してください。');
       }
     } catch (e) {
-      print('Error initializing recorder: $e');
+      print('エラー内容: $e');
     }
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final args = ModalRoute.of(context)?.settings.arguments;
-    if (widget.targetText != null) {
-      _targetText = widget.targetText;
-    } else if (args is String) {
-      _targetText = args;
+  void _onSubmitText() {
+    if (_textController.text.isNotEmpty) {
+      setState(() {
+        _targetText = _textController.text;
+        _isEditing = false;
+      });
     }
-  }
-
-  @override
-  void dispose() {
-    _recordingTimer?.cancel();
-    _recordingAnimationController.dispose();
-    _audioRecorder.dispose();
-    super.dispose();
   }
 
   Future<void> _startRecording() async {
     try {
-      final dir = await getTemporaryDirectory();
-      _recordingPath = '${dir.path}/recording_${DateTime.now().millisecondsSinceEpoch}.wav';
+      String recordingPath;
+      if (kIsWeb) {
+        recordingPath = 'recording_${DateTime.now().millisecondsSinceEpoch}.wav';
+      } else {
+        final dir = await getTemporaryDirectory();
+        recordingPath = '${dir.path}/recording_${DateTime.now().millisecondsSinceEpoch}.wav';
+      }
 
-      // Use the new API with RecordConfig
+      _recordingPath = recordingPath;
+      _webRecordingData = null; // リセット
+
       await _audioRecorder.start(
         const RecordConfig(
           encoder: AudioEncoder.wav,
           bitRate: 128000,
           sampleRate: 44100,
         ),
-        path: _recordingPath!,
+        path: recordingPath,
       );
 
       setState(() {
@@ -109,7 +136,6 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
         });
       });
 
-      print('録音開始: $_targetText');
     } catch (e) {
       print('録音開始エラー: $e');
       _showErrorSnackBar('録音の開始に失敗しました');
@@ -117,16 +143,53 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
   }
 
   Future<void> _stopRecording() async {
-    _recordingTimer?.cancel();
     try {
-      await _audioRecorder.stop();
-      setState(() {
-        _isRecording = false;
-        _hasRecorded = true;
-        _isAnalyzing = true;
-      });
-
-      await _analyzePronunciation();
+      _recordingTimer?.cancel();
+      
+      if (kIsWeb) {
+        // Web用の録音停止処理
+        final result = await _audioRecorder.stop();
+        
+        setState(() {
+          _isRecording = false;
+          _hasRecorded = true;
+          _isAnalyzing = true;
+        });
+        
+        // Web環境での録音データ処理
+        if (result != null) {
+          _webRecordingData = await _processWebRecordingData(result);
+          
+          if (_webRecordingData == null || _webRecordingData!.isEmpty) {
+            throw Exception('有効な録音データを取得できませんでした');
+          }
+          
+          // データ検証
+          if (!_validateRecordingData(_webRecordingData!)) {
+            throw Exception('録音データの検証に失敗しました');
+          }
+          
+          print('Web録音データ処理完了: ${_webRecordingData!.length} bytes');
+        } else {
+          throw Exception('録音データが取得できませんでした');
+        }
+        
+        await _analyzePronunciation();
+      } else {
+        // ネイティブ用の録音停止処理
+        await _audioRecorder.stop();
+        
+        if (_recordingPath != null && File(_recordingPath!).existsSync()) {
+          setState(() {
+            _isRecording = false;
+            _hasRecorded = true;
+            _isAnalyzing = true;
+          });
+          await _analyzePronunciation();
+        } else {
+          throw Exception('Recording file not found');
+        }
+      }
     } catch (e) {
       print('録音停止エラー: $e');
       setState(() {
@@ -134,45 +197,212 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
         _hasRecorded = false;
         _isAnalyzing = false;
       });
-      _showErrorSnackBar('録音の停止に失敗しました');
+      _showErrorSnackBar('録音の停止に失敗しました: ${e.toString()}');
     }
   }
 
-  Future<void> _analyzePronunciation() async {
-    if (_recordingPath == null || !File(_recordingPath!).existsSync()) {
-      setState(() {
-        _isAnalyzing = false;
-        _recordedText = '録音ファイルが見つかりません';
-      });
-      return;
-    }
-
+  /// Web環境での録音データを適切な形式に変換する
+  Future<Uint8List?> _processWebRecordingData(dynamic result) async {
     try {
-      final dio = Dio();
-      final formData = FormData.fromMap({
-        'audio': await MultipartFile.fromFile(_recordingPath!, filename: 'audio.wav'),
-        'text': _targetText ?? '',
-      });
+      if (result is String) {
+        // Base64文字列の場合
+        if (_isBase64String(result)) {
+          print('Base64データとして処理中...');
+          try {
+            return base64Decode(result);
+          } catch (e) {
+            print('Base64デコードエラー: $e');
+            // Base64デコードに失敗した場合、データURLの可能性をチェック
+            if (result.startsWith('data:')) {
+              return _processDataURL(result);
+            }
+            throw Exception('Base64デコードに失敗しました');
+          }
+        } 
+        // Data URLの場合 (data:audio/wav;base64,...)
+        else if (result.startsWith('data:')) {
+          print('Data URLとして処理中...');
+          return _processDataURL(result);
+        }
+        // 通常の文字列の場合（レアケース）
+        else {
+          print('文字列をUTF-8バイトとして処理中...');
+          return Uint8List.fromList(utf8.encode(result));
+        }
+      } 
+      // 既にバイナリデータの場合
+      else if (result is Uint8List) {
+        print('Uint8Listとして処理中...');
+        return result;
+      } 
+      else if (result is List<int>) {
+        print('List<int>からUint8Listに変換中...');
+        return Uint8List.fromList(result);
+      }
+      // Blobや他のWeb APIオブジェクトの場合
+      else if (result is List) {
+        print('Listとして処理中...');
+        try {
+          return Uint8List.fromList(result.cast<int>());
+        } catch (e) {
+          print('List変換エラー: $e');
+          return null;
+        }
+      }
+      else {
+        print('未対応の録音データ形式: ${result.runtimeType}');
+        // 最後の手段として文字列変換を試行
+        try {
+          final stringData = result.toString();
+          if (stringData.isNotEmpty && stringData != 'null') {
+            return Uint8List.fromList(utf8.encode(stringData));
+          }
+        } catch (e) {
+          print('フォールバック変換エラー: $e');
+        }
+        return null;
+      }
+    } catch (e) {
+      print('録音データ処理エラー: $e');
+      return null;
+    }
+  }
 
-      final response = await dio.post(
-        'http://localhost:8000/api/analyze', 
+  /// Base64文字列かどうかを判定する
+  bool _isBase64String(String str) {
+    // 基本的なBase64文字列の判定
+    if (str.isEmpty) return false;
+    
+    // Base64文字列は4の倍数の長さを持つ
+    if (str.length % 4 != 0) return false;
+    
+    // Base64文字で構成されているかチェック
+    final base64Pattern = RegExp(r'^[A-Za-z0-9+/]*={0,2}$');
+    return base64Pattern.hasMatch(str);
+  }
+
+  /// Data URLを処理してバイナリデータを抽出する
+  Uint8List? _processDataURL(String dataUrl) {
+    try {
+      // Data URLの形式: data:[<mime type>][;base64],<data>
+      final parts = dataUrl.split(',');
+      if (parts.length != 2) {
+        throw Exception('無効なData URL形式です');
+      }
+      
+      final header = parts[0];
+      final data = parts[1];
+      
+      if (header.contains('base64')) {
+        return base64Decode(data);
+      } else {
+        // Base64でない場合はURL デコードを試行
+        final decodedData = Uri.decodeComponent(data);
+        return Uint8List.fromList(utf8.encode(decodedData));
+      }
+    } catch (e) {
+      print('Data URL処理エラー: $e');
+      return null;
+    }
+  }
+
+  /// 録音データの検証を行う
+  bool _validateRecordingData(Uint8List data) {
+    // 最小限のデータサイズチェック
+    if (data.length < 44) {
+      print('録音データが小さすぎます: ${data.length} bytes');
+      return false;
+    }
+    
+    // WAVファイルのヘッダーチェック（オプション）
+    if (data.length >= 4) {
+      final header = String.fromCharCodes(data.sublist(0, 4));
+      if (header == 'RIFF') {
+        print('WAVファイルヘッダーを検出しました');
+        return true;
+      }
+    }
+    
+    // WebMやその他の形式の場合も有効とする
+    print('録音データを有効として処理します: ${data.length} bytes');
+    return true;
+  }
+
+  Future<void> _analyzePronunciation() async {
+    try {
+      if (!kIsWeb && (_recordingPath == null || !File(_recordingPath!).existsSync())) {
+        setState(() {
+          _isAnalyzing = false;
+          _recordedText = '録音ファイルが見つかりません';
+        });
+        return;
+      }
+
+      FormData formData;
+      
+      if (kIsWeb) {
+        // Web環境での処理
+        if (_webRecordingData == null || _webRecordingData!.isEmpty) {
+          throw Exception('Web環境での録音データが無効です');
+        }
+        
+        // APIが期待する 'file' フィールド名を使用
+        formData = FormData.fromMap({
+          'file': MultipartFile.fromBytes(
+            _webRecordingData!,
+            filename: 'audio.wav',
+            contentType: DioMediaType('audio', 'wav'),
+          ),
+          'text': _targetText ?? '',
+        });
+        
+        print('Web音声データサイズ: ${_webRecordingData!.length} bytes');
+      } else {
+        // ネイティブ用: ファイルパスから読み込み
+        formData = FormData.fromMap({
+          'file': await MultipartFile.fromFile(
+            _recordingPath!,
+            filename: 'audio.wav',
+            contentType: DioMediaType('audio', 'wav'),
+          ),
+          'text': _targetText ?? '',
+        });
+      }
+
+      print('API送信開始: ${kIsWeb ? "Web環境" : "ネイティブ環境"}');
+
+      final response = await _dio.post(
+        'http://localhost:8000/api/v1/analyze-audio',
         data: formData,
         options: Options(
           headers: {
             'Accept': 'application/json',
           },
+          // Content-Typeは自動設定されるため削除
           validateStatus: (status) => status! < 500,
+          sendTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 30),
         ),
       );
 
+      print('API応答ステータス: ${response.statusCode}');
+      print('API応答データ: ${response.data}');
+
       if (response.statusCode == 200) {
-        final recognizedText = response.data['recognized_text'] as String? ?? '';
-        setState(() {
-          _isAnalyzing = false;
-          _recordedText = recognizedText;
-        });
+        final responseData = response.data;
+        if (responseData is Map<String, dynamic>) {
+          final recognizedText = responseData['recognized_text'] as String? ?? '';
+          setState(() {
+            _isAnalyzing = false;
+            _recordedText = recognizedText.isNotEmpty ? recognizedText : '音声が認識できませんでした';
+          });
+          print('音声認識結果: $recognizedText');
+        } else {
+          throw Exception('予期しないレスポンス形式: ${responseData.runtimeType}');
+        }
       } else {
-        throw Exception('API error: ${response.statusCode}');
+        final errorMessage = response.data is Map ? response.data.toString() : response.data;
+        throw Exception('API error: ${response.statusCode} - $errorMessage');
       }
     } catch (e) {
       print('API通信エラー: $e');
@@ -180,7 +410,35 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
         _isAnalyzing = false;
         _recordedText = '認識に失敗しました';
       });
-      _showErrorSnackBar('音声認識に失敗しました');
+      
+      String errorMessage = '音声認識に失敗しました';
+      if (e is DioException) {
+        switch (e.type) {
+          case DioExceptionType.connectionTimeout:
+          case DioExceptionType.sendTimeout:
+          case DioExceptionType.receiveTimeout:
+            errorMessage = '通信がタイムアウトしました';
+            break;
+          case DioExceptionType.connectionError:
+            errorMessage = 'サーバーに接続できませんでした';
+            break;
+          case DioExceptionType.badResponse:
+            final statusCode = e.response?.statusCode;
+            final responseData = e.response?.data;
+            if (statusCode == 422) {
+              errorMessage = 'リクエストデータが不正です';
+              print('422エラー詳細: $responseData');
+            } else {
+              errorMessage = 'サーバーエラーが発生しました ($statusCode)';
+            }
+            break;
+          default:
+            errorMessage = '通信エラー: ${e.message}';
+        }
+      } else if (e.toString().contains('API error')) {
+        errorMessage = e.toString().replaceFirst('Exception: ', '');
+      }
+      _showErrorSnackBar(errorMessage);
     }
   }
 
@@ -192,6 +450,7 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
       _recordedText = '';
       _recordingDuration = Duration.zero;
       _recordingPath = null;
+      _webRecordingData = null;
     });
     _recordingTimer?.cancel();
   }
@@ -214,6 +473,14 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
           content: Text(message),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: '閉じる',
+            textColor: Colors.white,
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            },
+          ),
         ),
       );
     }
@@ -231,19 +498,37 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(
-                  Icons.text_snippet_outlined,
-                  color: Theme.of(context).primaryColor,
-                  size: 24,
+                Row(
+                  children: [
+                    Icon(
+                      Icons.text_snippet_outlined,
+                      color: Theme.of(context).primaryColor,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '練習テキスト',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF333333),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  '練習テキスト',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF333333),
-                  ),
+                IconButton(
+                  icon: Icon(_isEditing ? Icons.check : Icons.edit),
+                  onPressed: () {
+                    if (_isEditing) {
+                      _onSubmitText();
+                    } else {
+                      setState(() {
+                        _isEditing = true;
+                        _textController.text = _targetText ?? '';
+                      });
+                    }
+                  },
                 ),
               ],
             ),
@@ -256,14 +541,28 @@ class _TranscriptionScreenState extends State<TranscriptionScreen>
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: Colors.grey[200]!),
               ),
-              child: Text(
-                _targetText ?? '練習テキストが設定されていません',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFF333333),
-                  height: 1.6,
-                  fontSize: 16,
-                ),
-              ),
+              child: _isEditing
+                  ? TextField(
+                      controller: _textController,
+                      maxLines: null,
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        hintText: '練習したい文章を入力してください',
+                      ),
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: const Color(0xFF333333),
+                        height: 1.6,
+                        fontSize: 16,
+                      ),
+                    )
+                  : Text(
+                      _targetText ?? '練習テキストが設定されていません',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: const Color(0xFF333333),
+                        height: 1.6,
+                        fontSize: 16,
+                      ),
+                    ),
             ),
           ],
         ),

@@ -12,6 +12,11 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # 基本的なFlutterパッケージ
+  path_provider: ^2.1.5
+  #web用
+  localstorage: ^4.0.0
+
   # UI関連
   cupertino_icons: ^1.0.2
   google_fonts: ^6.1.0
@@ -26,9 +31,6 @@ dependencies:
   http: ^1.1.0
   dio: ^5.3.3
 
-  # ファイル操作
-  path_provider: ^2.1.1
-
   # 状態管理
   hooks_riverpod: ^2.4.3
   flutter_hooks: ^0.21.2
@@ -39,6 +41,7 @@ dependencies:
   # ユーティリティ
   freezed_annotation: ^3.0.0
   json_annotation: ^4.8.1
+  path: ^1.9.1
 
 dev_dependencies:
   flutter_test:
@@ -61,4 +64,4 @@ flutter:
 #      fonts:
 #        - asset: assets/fonts/NotoSansSC-Regular.otf
 #        - asset: assets/fonts/NotoSansSC-Bold.otf
-3          weight: 700
+#          weight: 700

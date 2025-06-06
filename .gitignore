@@ -1,0 +1,3 @@
+.env
+.env.local
+google_api_key.json

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    // ...existing code...
+    <key>NSMicrophoneUsageDescription</key>
+    <string>音声録音のためにマイクの使用許可が必要です</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>音声ファイルを保存するためにフォトライブラリの使用許可が必要です</string>
+    // ...existing code...
+</dict>
+</plist>

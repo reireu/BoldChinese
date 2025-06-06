@@ -5,13 +5,13 @@ import subprocess
 import sys
 from typing import Dict, Any
 
-# Kaldi paths and configs
+# kaldiのルートディレクトリとモデルのパスを環境変数から取得
 KALDI_ROOT = os.getenv("KALDI_ROOT", "/Users/serenakurashina/kaldi")
 MODEL_ROOT = os.getenv("MANDARIN_MODEL_PATH", f"{KALDI_ROOT}/egs/mandarin_bn_bci")
 
 def prepare_audio(audio_path: str, out_dir: str) -> str:
     """Convert audio to Kaldi format"""
-    # Convert to required format (16kHz, mono, WAV)
+    #  (16kHz, mono, WAV)
     out_path = os.path.join(out_dir, "audio.wav")
     cmd = [
         "sox", audio_path,
@@ -33,16 +33,16 @@ def prepare_text(text: str, out_dir: str) -> str:
 def run_alignment(audio_path: str, text: str, model_dir: str) -> Dict[str, Any]:
     """Run forced alignment using Kaldi"""
     
-    # Create working directory
+    # ディレクトリ作成
     work_dir = "tmp_align"
     os.makedirs(work_dir, exist_ok=True)
 
     try:
-        # Prepare input files
+        #ファイルの準備
         wav_path = prepare_audio(audio_path, work_dir)
         text_path = prepare_text(text, work_dir)
 
-        # Create wav.scp
+        # wav.scpの作成
         with open(os.path.join(work_dir, "wav.scp"), "w") as f:
             f.write(f"utt1 {wav_path}\n")
 
