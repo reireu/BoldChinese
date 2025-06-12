@@ -35,10 +35,10 @@ source venv/bin/activate  # For Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Start frontend
+# Start backend
 uvicorn app.main:app --reload
 
-# Start backend as well
+# Start frontend as well
 cd BoldChinese
 flutter run -d chrome
 ```
