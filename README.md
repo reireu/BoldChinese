@@ -35,10 +35,10 @@ source venv/bin/activate  # For Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Start frontend
-uvicorn app.main:app --reload
+# Start backend
+uvicorn app.main:app --reload --port 8000
 
-# Start backend as well
+# Start frontend as well
 cd BoldChinese
 flutter run -d chrome
 ```
@@ -48,4 +48,6 @@ This project will be released under the MIT License.
 
 ## Work in process
 Introducing the Workflow for Aligning Mandarin Speech using Kaidi<br>
-https://qiita.com/reireu/items/53fa6b3dac3504d304ce
+https://qiita.com/reireu/items/53fa6b3dac3504d304ce<br>
+2025-6-6<br>
+<img width="644" alt="スクリーンショット 2025-06-06 11 33 38" src="https://github.com/user-attachments/assets/f5b763ac-8d19-4e14-ae56-7af7ee8b4cb8" />
