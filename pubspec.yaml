@@ -12,6 +12,13 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # ネットワーク関連
+  connectivity_plus: ^5.0.1
+  dio: ^5.4.0
+  dio_web_adapter: ^2.1.1 
+  http: ^1.1.0
+
+
   # 基本的なFlutterパッケージ
   path_provider: ^2.1.5
   #web用
@@ -23,13 +30,10 @@ dependencies:
 
   # 音声録音/再生
   record: ^6.0.0
+  record_web: ^1.1.0
   record_macos: ^1.0.0 
   just_audio: ^0.10.3
   permission_handler: ^12.0.0+1
-
-  # HTTP通信
-  http: ^1.1.0
-  dio: ^5.3.3
 
   # 状態管理
   hooks_riverpod: ^2.4.3
